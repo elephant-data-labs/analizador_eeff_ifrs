@@ -239,9 +239,12 @@ def _append_average_balance_ratios(rows: dict[str, dict], cases: list[Historical
 def real_statement_history(amounts: pd.DataFrame, cases: Iterable[HistoricalCase], base_year: int) -> pd.DataFrame:
     """Convierte cada columna de período de `amounts` a pesos de `base_year`.
 
-    Usa la corrección monetaria del SII (ver `inflation.py`). Si falta el factor
-    de algún año (por ejemplo, un año comercial fuera de la tabla mantenida a
-    mano), esa columna queda en None en vez de mostrar una cifra incorrecta.
+    Usa el IPC del INE medido diciembre a diciembre (ver `inflation.py`), que es
+    la ventana correcta para comparar cierres de balance del 31 de diciembre —
+    no la corrección monetaria tributaria del SII, que mide noviembre a
+    noviembre para otro propósito. Si falta el factor de algún año (por
+    ejemplo, un año fuera de la tabla mantenida a mano), esa columna queda en
+    None en vez de mostrar una cifra incorrecta.
     """
     cases = list(cases)
     result = amounts[["Estado", "Concepto XBRL", "Cuenta"]].copy()
