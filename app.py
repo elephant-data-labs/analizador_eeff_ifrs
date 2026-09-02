@@ -254,8 +254,8 @@ if page == "Inicio":
         st.markdown("**Sobre las cifras**")
         st.markdown(
             "Los montos se muestran en millones (se puede desactivar) y, en Histórico, "
-            "también corregidos por inflación a pesos del último período, con la tabla anual del SII. "
-            "Las razones y los conteos no se corrigen."
+            "también corregidos por inflación a pesos del último período, con el IPC anual del INE "
+            "(diciembre a diciembre). Las razones y los conteos no se corrigen."
         )
 
     st.markdown("### Estado actual del repositorio")
@@ -491,16 +491,16 @@ elif page == "Histórico":
     missing_factor_periods = [period for period in periods_hist if real_amounts[period].isna().all()]
     if missing_factor_periods:
         st.warning(
-            "Falta el factor de corrección monetaria para llevar estos cierres a pesos de "
+            "Falta el factor de IPC para llevar estos cierres a pesos de "
             f"{periods_hist[-1]}: {', '.join(missing_factor_periods)}. Actualice la tabla en "
-            "eeff_analyzer/inflation.py con la circular del SII correspondiente."
+            "eeff_analyzer/inflation.py con el IPC de diciembre que publique el INE."
         )
     real_display = real_amounts.copy()
     for period in periods_hist:
         real_display[period] = real_display[period].map(lambda value: format_currency(value, show_millions))
     st.caption(
-        f"Montos nominales llevados a pesos de {periods_hist[-1]} usando la corrección monetaria "
-        "anual del SII (IPC noviembre a noviembre, publicada por circular cada enero)."
+        f"Montos nominales llevados a pesos de {periods_hist[-1]} usando la variación anual del "
+        "IPC (INE, diciembre a diciembre)."
     )
     st.dataframe(real_display, use_container_width=True, hide_index=True, height=table_height(real_display))
 
@@ -517,18 +517,18 @@ elif page == "Histórico":
     )
     st.line_chart(comparison)
 
-    with st.expander("Fuente de la corrección monetaria"):
+    with st.expander("Fuente del ajuste por IPC"):
         factors_table = pd.DataFrame(
             [
-                {"Año comercial": year, "Reajuste anual": f"{(float(factor) - 1) * 100:.1f}%", "Factor": f"{float(factor):.3f}"}
+                {"Año": year, "Variación IPC dic-dic": f"{(float(factor) - 1) * 100:.1f}%", "Factor": f"{float(factor):.3f}"}
                 for year, factor in sorted(ANNUAL_ADJUSTMENT_FACTORS.items())
             ]
         )
         st.dataframe(factors_table, use_container_width=True, hide_index=True)
         st.caption(
-            "Fuente: Servicio de Impuestos Internos (SII), circulares de corrección monetaria del "
-            "capital propio tributario (IPC de noviembre a noviembre). Tabla de mantención manual: "
-            "agregar la fila del año siguiente cuando el SII publique la circular de enero."
+            "Fuente: Instituto Nacional de Estadísticas (INE), variación del Índice de Precios al "
+            "Consumidor medida de diciembre a diciembre. Tabla de mantención manual: agregar la fila "
+            "del año siguiente cuando el INE publique el IPC de diciembre (primeros días de enero)."
         )
 
     st.markdown("#### Evolución de ratios")
