@@ -18,6 +18,12 @@ from eeff_analyzer.quality import balance_check, historical_quality
 
 st.set_page_config(page_title="Analizador EEFF IFRS", page_icon="📊", layout="wide")
 
+# Versión visible en la barra lateral: se actualiza a mano en cada deploy
+# relevante, para confirmar de un vistazo que la app está corriendo el
+# último commit (formato vAAAAMMDD, fecha del cambio).
+APP_VERSION = "v20260902"
+st.sidebar.caption(APP_VERSION)
+
 
 def raw_directory_signature(directory: Path) -> tuple:
     """Firma barata de una carpeta de empresa: cambia si se agrega, quita o
@@ -466,6 +472,15 @@ elif page == "Histórico":
     if len(cases) < 2:
         st.info(f"Deje al menos dos ZIP XBRL de la misma entidad en la carpeta «{selected_folder['label']}» para construir la evolución.")
         st.stop()
+
+    HISTORY_WINDOW_YEARS = 5
+    if len(cases) > HISTORY_WINDOW_YEARS:
+        older_cases = cases[:-HISTORY_WINDOW_YEARS]
+        cases = cases[-HISTORY_WINDOW_YEARS:]
+        st.caption(
+            f"Se muestran los últimos {HISTORY_WINDOW_YEARS} cierres ({cases[0].closing_date} a {cases[-1].closing_date}). "
+            f"Hay {len(older_cases)} cierre(s) más antiguo(s) en la carpeta que no se incluyen en esta vista."
+        )
 
     periods_hist = [case.closing_date for case in cases]
     entity = selected_entity or cases[0].entity_identifier or "Entidad no identificada"
