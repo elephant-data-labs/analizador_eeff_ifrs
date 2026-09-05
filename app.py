@@ -11,7 +11,7 @@ ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from eeff_analyzer.catalog import FINANCIAL_STATEMENT_CATALOG, NON_MONETARY_CATALOG
-from eeff_analyzer.analysis import calculate_ratios
+from eeff_analyzer.analysis import RATIO_CATEGORY_ORDER, calculate_ratios, ratio_category
 from eeff_analyzer.historical import company_folders, entity_options, filter_by_entity, horizontal_analysis, load_local_cases, percentage_change, ratio_history, real_statement_history, statement_history, vertical_analysis
 from eeff_analyzer.inflation import ANNUAL_ADJUSTMENT_FACTORS
 from eeff_analyzer.quality import balance_check, historical_quality
@@ -74,6 +74,41 @@ def table_height(frame: pd.DataFrame) -> int:
     de este dashboard superan ese largo y quedarían truncadas sin avisar.
     """
     return (len(frame) + 1) * 35 + 3
+
+
+def render_grouped_table(frame: pd.DataFrame, value_columns: list[str], formatter) -> None:
+    """Muestra una tabla por estado financiero, sin repetir la columna Estado.
+
+    Las tablas del histórico repetían "Estado" y "Concepto XBRL" en cada fila:
+    ruido que además empujaba las columnas de período fuera de la vista. El
+    estado pasa a ser encabezado de bloque y el concepto XBRL vive solo en la
+    sección de trazabilidad.
+    """
+    for statement_name in frame["Estado"].drop_duplicates().tolist():
+        group = frame[frame["Estado"] == statement_name]
+        display = group[["Cuenta"]].copy()
+        for column in value_columns:
+            display[column] = group[column].map(formatter)
+        st.markdown(f"**{statement_name}**")
+        st.dataframe(display, use_container_width=True, hide_index=True, height=table_height(display))
+
+
+def render_by_category(display: pd.DataFrame, indicators: pd.Series) -> None:
+    """Muestra una tabla de indicadores separada por familia de ratios.
+
+    `display` es la tabla ya formateada e `indicators` la columna de nombres en
+    el mismo orden: la familia se deduce del nombre, así que no hace falta
+    arrastrar una columna de categoría hasta la vista.
+    """
+    categories = indicators.map(ratio_category).tolist()
+    ordered = list(RATIO_CATEGORY_ORDER) + sorted(set(categories) - set(RATIO_CATEGORY_ORDER))
+    for category in ordered:
+        positions = [index for index, value in enumerate(categories) if value == category]
+        if not positions:
+            continue
+        group = display.iloc[positions]
+        st.markdown(f"**{category}**")
+        st.dataframe(group, use_container_width=True, hide_index=True, height=table_height(group))
 
 
 def format_count(value: object) -> str:
@@ -190,18 +225,33 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# La autoría vive en el marco y no en una pantalla de bienvenida: así está
+# presente en todas las hojas, en vez de desaparecer al salir de la portada.
+# La portada completa, con credenciales, se mantiene en la hoja Metodología.
+st.sidebar.markdown(
+    f"""
+    <div style="text-align:center; padding: 0.2rem 0 0.9rem 0;">
+        <div style="max-width:110px; margin:0 auto 0.6rem auto;">{_logo_html}</div>
+        <div style="color:#0b3d62; font-weight:700; font-size:1rem; line-height:1.2;">Carlos Alaniz Salinas</div>
+        <div style="color:#3c6b82; font-size:0.8rem; margin-top:0.15rem;">Elephant Data Labs</div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+st.sidebar.divider()
+
 raw_directory = ROOT / "data" / "raw"
 folders = company_folders(raw_directory)
 
 # Los botones de hoja van en su propia fila, a lo ancho de la página.
 page = st.radio(
     "Hoja",
-    ["Inicio", "EEFF", "Análisis", "Histórico", "Industria", "Interpretación"],
+    ["Ficha", "Estados", "Histórico", "Metodología"],
     horizontal=True,
     label_visibility="collapsed",
 )
 
-if page == "Inicio":
+if page == "Metodología":
     st.markdown(
         f"""
         <div class="analizador-portada">
@@ -287,11 +337,13 @@ if page == "Inicio":
 
     st.markdown("### Qué hay en cada hoja")
     st.markdown(
-        "- **EEFF** — estados financieros de un cierre, con la trazabilidad al concepto XBRL de cada cuenta.\n"
-        "- **Análisis** — indicadores de ese mismo cierre, con su fórmula y su interpretación.\n"
-        "- **Histórico** — evolución entre cierres: cifras nominales y ajustadas por IPC, ratios, "
+        "- **Ficha** — el cierre seleccionado y sus indicadores principales, con fórmula, "
+        "interpretación y descomposición Du Pont. Es la consulta rápida.\n"
+        "- **Estados** — los estados financieros del cierre, con la trazabilidad al concepto XBRL "
+        "de cada cuenta y el control de la ecuación contable.\n"
+        "- **Histórico** — evolución entre cierres: cifras nominales y reexpresadas por IPC, ratios, "
         "grados de apalancamiento y análisis vertical y horizontal.\n"
-        "- **Industria** e **Interpretación** — módulos en preparación."
+        "- **Metodología** — esta hoja: cómo cargar los datos, qué se valida y con qué criterios se calcula."
     )
     st.markdown(
         "**Por qué se trabaja desde el XBRL** — es el mismo archivo que la empresa presenta al regulador, "
@@ -299,9 +351,13 @@ if page == "Inicio":
     )
     st.stop()
 
-# Las columnas se crean primero y se rellenan por partes: entre medio hay que
-# leer la carpeta elegida, porque los cierres disponibles dependen de ella.
-control_cols = st.columns([1.6, 1.1, 1])
+# Los selectores viven en la barra lateral: así el contexto elegido (empresa,
+# cierre y escala) queda visible al cambiar de hoja en vez de repetirse arriba,
+# y la hoja recupera el ancho completo para las tablas.
+# Se rellenan por partes porque los cierres disponibles dependen de la carpeta
+# que se haya elegido antes.
+st.sidebar.markdown("### Contexto")
+control_cols = [st.sidebar, st.sidebar, st.sidebar]
 with control_cols[0]:
     if folders:
         folder_labels = [folder["label"] for folder in folders]
@@ -372,8 +428,8 @@ selected_period = max(periods)
 
 st.divider()
 
-if page == "EEFF":
-    st.subheader(f"EEFF / XBRL — cierre {selected_period}")
+if page == "Estados":
+    st.subheader(f"Estados financieros — cierre {selected_period}")
     st.write("Las cuentas se seleccionan por concepto XBRL y por contexto sin dimensiones cuando está disponible.")
     entity = next(iter(instance.entity_identifiers()), "Entidad no identificada")
     entity_display = instance.entity_name() or entity
@@ -424,8 +480,8 @@ if page == "EEFF":
         facts = instance.facts_frame(selected_period)
         st.dataframe(facts, use_container_width=True, hide_index=True)
 
-elif page == "Análisis":
-    st.subheader(f"Análisis — cierre {selected_period}")
+elif page == "Ficha":
+    st.subheader(f"Ficha — cierre {selected_period}")
     st.write("Indicadores calculados solo desde hechos XBRL del cierre seleccionado. No hay estimaciones ni IA.")
     ratios = calculate_ratios(instance, selected_period)
     calculated = ratios[ratios["Estado"] == "Calculado"].copy()
@@ -444,9 +500,7 @@ elif page == "Análisis":
     display = ratios[["Indicador", "Valor", "Unidad", "Fórmula", "Estado"]].copy()
     display["Valor"] = ratios.apply(lambda row: format_ratio_value(row["Valor"], row["Unidad"], show_millions), axis=1)
     display["Unidad"] = display["Unidad"].map(format_unit_label)
-    # Altura calculada para mostrar todos los indicadores sin scroll interno:
-    # con el alto por defecto la tabla corta las últimas filas.
-    st.dataframe(display, use_container_width=True, hide_index=True, height=table_height(display))
+    render_by_category(display, ratios["Indicador"])
     st.subheader("Du Pont")
     dupont = ratios[ratios["Indicador"].isin(["Margen neto", "Rotación de activos al cierre", "Multiplicador patrimonial", "ROE Du Pont al cierre"])].copy()
     dupont["Valor"] = dupont.apply(lambda row: format_ratio_value(row["Valor"], row["Unidad"], show_millions), axis=1)
@@ -494,10 +548,11 @@ elif page == "Histórico":
 
     st.markdown("#### Cifras principales")
     amounts = statement_history(cases, FINANCIAL_STATEMENT_CATALOG)
-    amounts_display = amounts.copy()
-    for period in periods_hist:
-        amounts_display[period] = amounts_display[period].map(lambda value: format_currency(value, show_millions))
-    st.dataframe(amounts_display, use_container_width=True, hide_index=True, height=table_height(amounts_display))
+    render_grouped_table(
+        amounts,
+        periods_hist,
+        lambda value: format_currency(value, show_millions),
+    )
     st.caption("Cifras nominales, en millones de la unidad declarada." if show_millions else "Cifras nominales exactas, en la unidad declarada.")
 
     st.markdown("#### Cifras principales ajustadas por IPC")
@@ -510,14 +565,15 @@ elif page == "Histórico":
             f"{periods_hist[-1]}: {', '.join(missing_factor_periods)}. Actualice la tabla en "
             "eeff_analyzer/inflation.py con el IPC de diciembre que publique el INE."
         )
-    real_display = real_amounts.copy()
-    for period in periods_hist:
-        real_display[period] = real_display[period].map(lambda value: format_currency(value, show_millions))
     st.caption(
         f"Montos nominales llevados a pesos de {periods_hist[-1]} usando la variación anual del "
         "IPC (INE, diciembre a diciembre)."
     )
-    st.dataframe(real_display, use_container_width=True, hide_index=True, height=table_height(real_display))
+    render_grouped_table(
+        real_amounts,
+        periods_hist,
+        lambda value: format_currency(value, show_millions),
+    )
 
     account_options = amounts["Cuenta"].tolist()
     chart_account = st.selectbox("Cuenta para comparar nominal vs. ajustado por IPC", account_options)
@@ -572,7 +628,7 @@ elif page == "Histórico":
         for period in periods_hist:
             ratios_display.loc[row.name, period] = format_ratio_value(row[period], row["Unidad"], show_millions)
     ratios_display["Unidad"] = ratios_display["Unidad"].map(format_unit_label)
-    st.dataframe(ratios_display, use_container_width=True, hide_index=True, height=table_height(ratios_display))
+    render_by_category(ratios_display, ratios["Indicador"])
     with st.expander("¿Qué significa cada indicador?"):
         for _, row in ratios.iterrows():
             if row["Interpretación"]:
@@ -581,35 +637,36 @@ elif page == "Histórico":
     st.markdown("#### Variación interanual de las cuentas")
     changes = percentage_change(amounts, periods_hist)
     change_columns = [column for column in changes.columns if " vs " in column]
-    for column in change_columns:
-        changes[column] = changes[column].map(lambda value: "—" if pd.isna(value) else f"{value:.1f}%")
-    st.dataframe(changes, use_container_width=True, hide_index=True, height=table_height(changes))
+    render_grouped_table(
+        changes,
+        change_columns,
+        lambda value: "—" if pd.isna(value) else f"{value:.1f}%",
+    )
     st.caption("La tabla de ratios incluye indicadores al cierre y, desde el segundo período disponible, versiones con saldos promedio y los grados de apalancamiento (que requieren dos años para calcularse).")
 
     st.markdown("#### Análisis vertical")
     st.caption("Cada partida como porcentaje de su base del mismo período: las cuentas de balance sobre activos totales y las de resultados sobre ingresos.")
     vertical = vertical_analysis(amounts, periods_hist)
-    vertical_display = vertical[["Estado", "Cuenta"]].copy()
-    for period in periods_hist:
-        vertical_display[period] = vertical[period].map(lambda value: "—" if pd.isna(value) else f"{float(value):.1f}%")
-    st.dataframe(vertical_display, use_container_width=True, hide_index=True, height=table_height(vertical_display))
+    render_grouped_table(
+        vertical,
+        periods_hist,
+        lambda value: "—" if pd.isna(value) else f"{float(value):.1f}%",
+    )
 
     st.markdown("#### Análisis horizontal")
-    st.caption(f"Números índice con base 100 en {periods_hist[0]}. Un índice de 130 indica un nivel 30% superior al del año base.")
+    st.caption(f"Variación acumulada respecto a {periods_hist[0]}, que es el período base y por eso no aparece como columna. Un +30% indica un nivel 30% superior al del año base; un valor negativo, una caída.")
     horizontal = horizontal_analysis(amounts, periods_hist)
-    horizontal_display = horizontal[["Estado", "Cuenta"]].copy()
-    for period in periods_hist:
-        horizontal_display[period] = horizontal[period].map(lambda value: "—" if pd.isna(value) else f"{float(value):.0f}")
-    st.dataframe(horizontal_display, use_container_width=True, hide_index=True, height=table_height(horizontal_display))
+    # horizontal_analysis entrega números índice con base 100. Se muestran como
+    # variación acumulada (índice menos 100) porque el signo se lee de inmediato,
+    # mientras que comparar cada índice contra 100 obliga a traducir mentalmente.
+    render_grouped_table(
+        horizontal,
+        periods_hist[1:],
+        lambda value: "—" if pd.isna(value) else f"{float(value) - 100:+.1f}%",
+    )
     st.caption("Ambos análisis usan cifras nominales, tal como vienen del XBRL; el efecto de la inflación se aísla en la tabla ajustada por IPC de más arriba.")
 
     with st.expander("Trazabilidad y controles de los ZIP locales"):
         quality = historical_quality(all_cases, selected_entity)
         quality["Diferencia"] = quality["Diferencia"].map(format_number)
         st.dataframe(quality, use_container_width=True, hide_index=True)
-elif page == "Industria":
-    st.subheader("Industria")
-    st.info("Siguiente módulo: comparar con pares seleccionados; no se incorpora aún descarga ni base externa.")
-else:
-    st.subheader("Interpretación")
-    st.info("Punto reservado para una API de IA intercambiable. Recibirá ratios calculados y datos validados, nunca el control del proceso.")

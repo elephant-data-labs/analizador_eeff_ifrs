@@ -73,6 +73,55 @@ RATIO_EXPLANATIONS = {
 }
 
 
+# Familias de ratios. Agrupar los indicadores por lo que miden es la forma en
+# que los presenta cualquier informe financiero: la estructura misma dice algo,
+# y una tabla plana de veinte filas no dice nada.
+RATIO_CATEGORY_ORDER = [
+    "Liquidez",
+    "Endeudamiento y cobertura",
+    "Actividad",
+    "Rentabilidad",
+    "Du Pont",
+    "Apalancamiento",
+    "Por acción",
+]
+
+RATIO_CATEGORIES = {
+    "Capital de trabajo": "Liquidez",
+    "Liquidez corriente": "Liquidez",
+    "Prueba ácida": "Liquidez",
+    "Liquidez de caja": "Liquidez",
+    "Endeudamiento sobre activos": "Endeudamiento y cobertura",
+    "Deuda sobre patrimonio": "Endeudamiento y cobertura",
+    "Multiplicador patrimonial": "Endeudamiento y cobertura",
+    "Cobertura de gastos financieros": "Endeudamiento y cobertura",
+    "Rotación de activos al cierre": "Actividad",
+    "Rotación de activos promedio": "Actividad",
+    "Rotación de cuentas por cobrar": "Actividad",
+    "Rotación de inventarios": "Actividad",
+    "Días de cobro": "Actividad",
+    "Días de inventario": "Actividad",
+    "Margen operacional": "Rentabilidad",
+    "Margen neto": "Rentabilidad",
+    "ROA al cierre": "Rentabilidad",
+    "ROE al cierre": "Rentabilidad",
+    "ROA con activos promedio": "Rentabilidad",
+    "ROE con patrimonio promedio": "Rentabilidad",
+    "Flujo operacional / ingresos": "Rentabilidad",
+    "ROE Du Pont al cierre": "Du Pont",
+    "Grado de apalancamiento operativo (GAO)": "Apalancamiento",
+    "Grado de apalancamiento financiero (GAF)": "Apalancamiento",
+    "Grado de apalancamiento combinado (GAC)": "Apalancamiento",
+    "Utilidad por acción": "Por acción",
+    "Valor libro por acción": "Por acción",
+}
+
+
+def ratio_category(indicator: str) -> str:
+    """Familia a la que pertenece un indicador. Los no mapeados quedan en Otros."""
+    return RATIO_CATEGORIES.get(indicator, "Otros")
+
+
 def _divide(numerator: Decimal | None, denominator: Decimal | None) -> Decimal | None:
     if numerator is None or denominator is None or denominator == 0:
         return None

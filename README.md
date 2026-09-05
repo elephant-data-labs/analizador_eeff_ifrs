@@ -9,8 +9,7 @@ XBRL. El primer caso de prueba incluido es **Aguas Andinas S.A. — consolidado,
 - Lee instancias XBRL desde un ZIP o desde una carpeta extraída.
 - Conserva contexto, período, unidad, dimensiones, precisión y etiqueta.
 - Construye una vista de EEFF con cuentas IFRS principales.
-- Deja visibles las hojas futuras: Análisis, Histórico, Industria e
-  Interpretación.
+- Deja visible la hoja futura de Interpretación.
 
 No descarga archivos desde la CMF, no procesa PDF y no llama a ningún modelo de
 IA. Esos puntos se incorporarán sobre las interfaces indicadas en el código.
@@ -25,7 +24,7 @@ python -m streamlit run app.py
 ```
 
 La aplicación abre por defecto el caso de prueba incluido en
-`data/raw/aguas_andinas_2025_12_xbrl.zip`. Puede reemplazarlo temporalmente
+`data/raw/aguas_andinas/aguas_andinas_2025_12_xbrl.zip`. Puede reemplazarlo temporalmente
 cargando otro ZIP XBRL desde la barra lateral.
 
 ## Estructura
